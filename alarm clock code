@@ -1,0 +1,141 @@
+module DigitalClock(
+  input reset,
+  input clk,
+  input [1:0] hours_tens,
+  input [3:0] hours_ones,
+  input [3:0] minutes_tens,
+  input [3:0] minutes_ones,
+  input load_time,
+  input load_alarm,
+  input stop_alarm,
+  input alarm_enable,
+  output reg alarm_triggered,
+  output reg [1:0] displayed_hours_tens,
+  output reg [3:0] displayed_hours_ones,
+  output reg [3:0] displayed_minutes_tens,
+  output reg [3:0] displayed_minutes_ones,
+  output reg [3:0] displayed_seconds_tens,
+  output reg [3:0] displayed_seconds_ones
+);
+
+  reg clock_1s;
+  reg [3:0] tmp_1s;
+  reg [5:0] tmp_hours, tmp_minutes, tmp_seconds;
+  reg [1:0] current_hours_tens, alarm_hours_tens;
+  reg [3:0] current_hours_ones, alarm_hours_ones;
+  reg [3:0] current_minutes_tens, alarm_minutes_tens;
+  reg [3:0] current_minutes_ones, alarm_minutes_ones;
+  reg [3:0] current_seconds_tens, current_seconds_ones;
+
+  function [3:0] modulo_10;
+    input [5:0] number;
+    begin
+      modulo_10 = (number >= 50) ? 5 : ((number >= 40) ? 4 : ((number >= 30) ? 3 : ((number >= 20) ? 2 : ((number >= 10) ? 1 : 0))));
+    end
+  endfunction
+
+  always @(posedge clock_1s or posedge reset) begin
+    if (reset) begin
+      current_hours_tens <= 2'b00;
+      current_hours_ones <= 4'b0000;
+      current_minutes_tens <= 4'b0000;
+      current_minutes_ones <= 4'b0000;
+      current_seconds_tens <= 4'b0000;
+      current_seconds_ones <= 4'b0000;
+      tmp_hours <= hours_tens * 10 + hours_ones;
+      tmp_minutes <= minutes_tens * 10 + minutes_ones;
+      tmp_seconds <= 0;
+    end else begin
+      if (load_alarm) begin
+        alarm_hours_tens <= hours_tens;
+        alarm_hours_ones <= hours_ones;
+        alarm_minutes_tens <= minutes_tens;
+        alarm_minutes_ones <= minutes_ones;
+      end
+
+      if (load_time) begin
+        tmp_hours <= hours_tens * 10 + hours_ones;
+        tmp_minutes <= minutes_tens * 10 + minutes_ones;
+        tmp_seconds <= 0;
+      end else begin
+        tmp_seconds <= tmp_seconds + 1;
+
+        if (tmp_seconds >= 59) begin
+          tmp_minutes <= tmp_minutes + 1;
+          tmp_seconds <= 0;
+
+          if (tmp_minutes >= 59) begin
+            tmp_minutes <= 0;
+            tmp_hours <= tmp_hours + 1;
+
+            if (tmp_hours >= 24) begin
+              tmp_hours <= 0;
+            end
+          end
+        end
+      end
+    end
+  end
+
+  always @(posedge clk or posedge reset) begin
+    if (reset) begin
+      tmp_1s <= 0;
+      clock_1s <= 0;
+    end else begin
+      tmp_1s <= tmp_1s + 1;
+
+      if (tmp_1s <= 5) begin
+        clock_1s <= 0;
+      end else if (tmp_1s >= 10) begin
+        clock_1s <= 1;
+        tmp_1s <= 1;
+      end else begin
+        clock_1s <= 1;
+      end
+    end
+  end
+
+  always @* begin
+    if (tmp_hours >= 20) begin
+      current_hours_tens = 2;
+    end else begin
+      if (tmp_hours >= 10)
+        current_hours_tens = 1;
+      else
+        current_hours_tens = 0;
+    end
+
+    current_hours_ones = tmp_hours - current_hours_tens * 10;
+    current_minutes_tens = modulo_10(tmp_minutes);
+    current_minutes_ones = tmp_minutes - current_minutes_tens * 10;
+    current_seconds_tens = modulo_10(tmp_seconds);
+    current_seconds_ones = tmp_seconds - current_seconds_tens * 10;
+  end
+
+  always @(posedge clock_1s or posedge reset) begin
+    if (reset) begin
+      alarm_triggered <= 0;
+    end else begin
+      if ((alarm_hours_tens == current_hours_tens) &&
+          (alarm_hours_ones == current_hours_ones) &&
+          (alarm_minutes_tens == current_minutes_tens) &&
+          (alarm_minutes_ones == current_minutes_ones)) begin
+        if (alarm_enable) begin
+          alarm_triggered <= 1;
+        end
+      end
+
+      if (stop_alarm) begin
+        alarm_triggered <= 0;
+      end
+    end
+  end
+
+  assign displayed_hours_tens = current_hours_tens;
+  assign displayed_hours_ones = current_hours_ones;
+  assign displayed_minutes_tens = current_minutes_tens;
+  assign displayed_minutes_ones = current_minutes_ones;
+  assign displayed_seconds_tens = current_seconds_tens;
+  assign displayed_seconds_ones = current_seconds_ones;
+
+endmodule
